@@ -5,6 +5,7 @@ import { Button } from "@/components/Button";
 import { colors } from "@/constants/colors";
 import { useAuthStore } from "@/store/authStore";
 import { Mail, Lock, User, ArrowLeft } from "lucide-react-native";
+import { checkEmailExists, registerUser } from "@/api/mockApi";
 
 export default function RegisterScreen() {
   const [name, setName] = useState("");
@@ -25,20 +26,38 @@ export default function RegisterScreen() {
       setError("Password must be at least 6 characters");
       return;
     }
-    
+
+    // Validate email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     setLoading(true);
     setError("");
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const success = await register(name, email, password);
-      
+      // Check if email exists
+      const emailExists = await checkEmailExists(email);
+      if (emailExists) {
+        setError("Email already in use");
+        setLoading(false);
+        return;
+      }
+
+      // Register user
+      const { success, error } = await registerUser({
+        fullNames: name,
+        email,
+        password, // Note: In a real app, you should hash the password before sending
+      });
+
       if (success) {
-        router.replace("/(tabs)");
+        // You might want to automatically log the user in after registration
+        // For now, just redirect to login
+        router.replace("/login");
       } else {
-        setError("Registration failed. Email may already be in use.");
+        setError(error || "Registration failed. Please try again.");
       }
     } catch (err) {
       setError("An error occurred. Please try again.");

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { router, Link } from "expo-router";
 import { Button } from "@/components/Button";
@@ -12,32 +12,41 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
-  const { login } = useAuthStore();
+  const { login, error: authError, clearError, isLoading } = useAuthStore();
+
+  // Clear errors when component mounts
+  useEffect(() => {
+    clearError();
+  }, []);
+
+  // Sync loading states
+  useEffect(() => {
+    setLoading(isLoading);
+  }, [isLoading]);
+
+  // Display auth store errors
+  useEffect(() => {
+    if (authError) {
+      setError(authError);
+    }
+  }, [authError]);
 
   const handleLogin = async () => {
     if (!email || !password) {
       setError("Please fill in all fields");
       return;
     }
-    
-    setLoading(true);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     setError("");
+    const success = await login(email, password);
     
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const success = await login(email, password);
-      
-      if (success) {
-        router.replace("/(tabs)");
-      } else {
-        setError("Invalid email or password");
-      }
-    } catch (err) {
-      setError("An error occurred. Please try again.");
-    } finally {
-      setLoading(false);
+    if (success) {
+      router.replace("/(tabs)");
     }
   };
 
@@ -47,12 +56,16 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={() => router.back()}
+          disabled={loading}
         >
-          <ArrowLeft size={24} color={colors.text} />
+          <ArrowLeft size={24} color={loading ? colors.textSecondary : colors.text} />
         </TouchableOpacity>
         
         <View style={styles.header}>
@@ -61,35 +74,54 @@ export default function LoginScreen() {
         </View>
         
         <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Mail size={20} color={colors.textSecondary} style={styles.inputIcon} />
+          <View style={[
+            styles.inputContainer,
+            error && styles.inputContainerError
+          ]}>
+            <Mail size={20} color={error ? colors.danger : colors.textSecondary} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="Email"
+              placeholderTextColor={colors.textSecondary}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
+              autoComplete="email"
+              editable={!loading}
+              selectTextOnFocus={!loading}
             />
           </View>
           
-          <View style={styles.inputContainer}>
-            <Lock size={20} color={colors.textSecondary} style={styles.inputIcon} />
+          <View style={[
+            styles.inputContainer,
+            error && styles.inputContainerError
+          ]}>
+            <Lock size={20} color={error ? colors.danger : colors.textSecondary} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="Password"
+              placeholderTextColor={colors.textSecondary}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              editable={!loading}
+              selectTextOnFocus={!loading}
+              autoComplete="password"
             />
           </View>
           
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
           
           <Button 
             title="Log In" 
             onPress={handleLogin} 
             loading={loading}
+            disabled={loading}
             style={styles.button}
           />
           
@@ -101,8 +133,13 @@ export default function LoginScreen() {
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
           <Link href="/register" asChild>
-            <TouchableOpacity>
-              <Text style={styles.signupText}>Sign Up</Text>
+            <TouchableOpacity disabled={loading}>
+              <Text style={[
+                styles.signupText,
+                loading && styles.disabledText
+              ]}>
+                Sign Up
+              </Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -119,9 +156,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     padding: 24,
+    paddingBottom: 40,
   },
   backButton: {
     marginBottom: 24,
+    alignSelf: 'flex-start',
   },
   header: {
     marginBottom: 40,
@@ -149,6 +188,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  inputContainerError: {
+    borderColor: colors.danger,
+  },
   inputIcon: {
     marginRight: 12,
   },
@@ -158,9 +200,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
+  errorContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
   errorText: {
     color: colors.danger,
-    marginBottom: 16,
+    fontSize: 14,
   },
   button: {
     marginTop: 8,
@@ -187,5 +233,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.primary,
     fontWeight: "600",
+  },
+  disabledText: {
+    opacity: 0.5,
   },
 });

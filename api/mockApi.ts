@@ -2,19 +2,99 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Booking, ParkingSpot, Ticket } from "@/types";
 import { parkingSpots } from "@/mocks/parkingSpots";
 
+const BASE_URL = "https://6834e461cd78db2058bfa8a2.mockapi.io/api/v1";
+
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// register user
+export const registerUser = async (userData: {
+  fullNames: string;
+  email: string;
+  password: string;
+}): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const response = await fetch(`${BASE_URL}/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...userData,
+        createdAt: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      return { success: false, error: errorData.message || 'Registration failed' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Registration error:', error);
+    return { success: false, error: 'Network error. Please try again.' };
+  }
+};
+
+export const checkEmailExists = async (email: string): Promise<boolean> => {
+  try {
+    const response = await fetch(`${BASE_URL}/users?email=${encodeURIComponent(email)}`);
+    if (!response.ok) {
+      return false;
+    }
+    const users = await response.json();
+    return users.length > 0;
+  } catch (error) {
+    console.error('Error checking email:', error);
+    return false;
+  }
+};
+
 // Get all parking spots
 export const fetchParkingSpots = async (): Promise<ParkingSpot[]> => {
-  await delay(800);
-  return parkingSpots;
+  try {
+    const response = await fetch(`${BASE_URL}/parkingSpots`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching parking spots:", error);
+    // Fallback to local storage if API fails
+    try {
+      const localSpots = await AsyncStorage.getItem("parkingSpots");
+      return localSpots ? JSON.parse(localSpots) : [];
+    } catch (localError) {
+      console.error("Error fetching from local storage:", localError);
+      return [];
+    }
+  }
 };
 
 // Get parking spot by ID
-export const fetchParkingSpotById = async (id: string): Promise<ParkingSpot | undefined> => {
-  await delay(500);
-  return parkingSpots.find(spot => spot.id === id);
+export const fetchParkingSpotById = async (id: string): Promise<ParkingSpot | null> => {
+  try {
+    const response = await fetch(`${BASE_URL}/parkingSpots/${id}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching parking spot ${id}:`, error);
+    // Fallback to local storage
+    try {
+      const localSpots = await AsyncStorage.getItem("parkingSpots");
+      if (localSpots) {
+        const spots: ParkingSpot[] = JSON.parse(localSpots);
+        return spots.find(spot => spot.id === id) || null;
+      }
+      return null;
+    } catch (localError) {
+      console.error("Error fetching from local storage:", localError);
+      return null;
+    }
+  }
 };
 
 // Get all bookings
